@@ -17,7 +17,8 @@ markdown format with the form as ->
 ## Usage
 
 Create uberjar file from the project with the help of leiningen uberjar task.
-Then run 
+Then run `java -jar filename.jar path-to-workout-file`.
+Run the program with `-h` flag to see list of all available options.
 
 ## License
 
