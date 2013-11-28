@@ -69,7 +69,6 @@
                                                                       "Start date parameter (optional) must have format dd.MM.yyyy\n"
                                                                       "End date parameter (optional) must have format dd.MM.yyyy")
                                                             ["-h" "--help" "Show help" :flag true :default false]
-                                                            ;["-p" "--path" "REQUIRED: Workout file path)"]
                                                             ["-s" "--start" "Start date (including) of summary in format dd.MM.yyyy"]
                                                             ["-e" "--end" "End date (including) of summary in format dd.MM.yyyy"])]
     (when help
