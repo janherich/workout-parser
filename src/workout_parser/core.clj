@@ -44,7 +44,7 @@
                      [{} nil]
                      (apply concat (map line-seq readers))))
       (finally
-        (doseq [rdr (reverse readers)]
+        (doseq [rdr readers]
           (. rdr close))))))
 
 (defn query-workout
