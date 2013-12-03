@@ -39,8 +39,9 @@
       (first (reduce (fn [[workout-map current-date] line]
                        (if-let [new-date (parse-date-string line-date-pattern line false)]
                          [workout-map new-date]
-                         (let [[amount-match amount] (re-find  line-amount-pattern line)]
-                           [(if amount-match (update-in workout-map [current-date] conj (Integer. amount)) workout-map) current-date])))
+                         (if-let [[amount-match amount] (re-find  line-amount-pattern line)]
+                           [(update-in workout-map [current-date] conj (Integer. amount)) current-date]
+                           [workout-map current-date])))
                      [{} nil]
                      (apply concat (map line-seq readers))))
       (finally
