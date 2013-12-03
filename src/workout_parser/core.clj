@@ -4,7 +4,7 @@
   (:gen-class :main true))
 
 ;; Pattern for date lines, which must start with # character, followed by arbitrary
-;; number of whitespaces, then by date in the format dd.MM.yyyy which could be 
+;; number of whitespaces, then by date in the format dd.MM.yyyy which could be
 ;; followed by arbitrary number of whitespaces (but no other characters)
 (def line-date-pattern #"^#\s*([0-9]{2})\.([0-9]{2})\.([0-9]{4})\s*$")
 
@@ -29,25 +29,25 @@
 (defn parse-markdown
   "Parses file (specified by path in argument filename) in markdown format containing log of workout activities.
    This log must adhere to some rules -> record for each day starts with the line '# dd.MM.yyyy' and each successive
-   line containes workout amount which starts with the asterix (*) sign followed by unbounded number and (optional) 
-   any combination of whitespace and word characters (description of the workout). Record for each day ends by the 
+   line containes workout amount which starts with the asterix (*) sign followed by unbounded number and (optional)
+   any combination of whitespace and word characters (description of the workout). Record for each day ends by the
    start of the next record or by end of file. Output from this function is a map of workout days (vector of three
    integers [year month day]) to sequences of workout amounts (sequence of integers (amount1, amount2 ...))."
   [filename]
   (with-open [rdr (io/reader filename)]
-    (loop [lines (line-seq rdr) current-date nil workout-map {}]
-      (if-let [line (first lines)]
-        (if-let [new-date (parse-date-string line-date-pattern line false)]
-          (recur (rest lines) new-date workout-map)
-          (let [[amount-match amount] (re-find line-amount-pattern line)]
-            (recur (rest lines) current-date (if amount-match (update-in workout-map [current-date] conj (Integer. amount)) workout-map))))
-        workout-map))))
+    (first (reduce (fn [[workout-map current-date] line]
+                     (if-let [new-date (parse-date-string line-date-pattern line false)]
+                       [workout-map new-date]
+                       (let [[amount-match amount] (re-find  line-amount-pattern line)]
+                         [(if amount-match (update-in workout-map [current-date] conj (Integer. amount)) workout-map) current-date])))
+                   [{} nil]
+                   (line-seq rdr)))))
 
 (defn query-workout
-  "Queries workout map from the function parse-markdown by the start and end date parameters (each of those parameters 
+  "Queries workout map from the function parse-markdown by the start and end date parameters (each of those parameters
    could be nil, in this case, it's ignored in filtering). Returns lazy sequence of filtered [k v] pairs from workout map."
   [workout-map start end]
-  (let [filter-fn `(fn [[~'date ~'_]] 
+  (let [filter-fn `(fn [[~'date ~'_]]
                      ~(let [start-clause (when start `(<= (compare ~(parse-date-string input-date-pattern start true) ~'date) 0))
                             end-clause (when end `(>= (compare ~(parse-date-string input-date-pattern end true) ~'date) 0))
                             clauses (filter identity (list start-clause end-clause))]
