@@ -27,21 +27,25 @@
       (throw (Exception. (str "bad date format encountered, be sure to supply date in format: " (.pattern Pattern)))))))
 
 (defn parse-markdown
-  "Parses file (specified by path in argument filename) in markdown format containing log of workout activities.
+  "Parses files (specified by paths in argument filenames) in markdown format containing log of workout activities.
    This log must adhere to some rules -> record for each day starts with the line '# dd.MM.yyyy' and each successive
    line containes workout amount which starts with the asterix (*) sign followed by unbounded number and (optional)
    any combination of whitespace and word characters (description of the workout). Record for each day ends by the
    start of the next record or by end of file. Output from this function is a map of workout days (vector of three
    integers [year month day]) to sequences of workout amounts (sequence of integers (amount1, amount2 ...))."
-  [filename]
-  (with-open [rdr (io/reader filename)]
-    (first (reduce (fn [[workout-map current-date] line]
-                     (if-let [new-date (parse-date-string line-date-pattern line false)]
-                       [workout-map new-date]
-                       (let [[amount-match amount] (re-find  line-amount-pattern line)]
-                         [(if amount-match (update-in workout-map [current-date] conj (Integer. amount)) workout-map) current-date])))
-                   [{} nil]
-                   (line-seq rdr)))))
+  [filenames]
+  (let [readers (map io/reader filenames)]
+    (try
+      (first (reduce (fn [[workout-map current-date] line]
+                       (if-let [new-date (parse-date-string line-date-pattern line false)]
+                         [workout-map new-date]
+                         (let [[amount-match amount] (re-find  line-amount-pattern line)]
+                           [(if amount-match (update-in workout-map [current-date] conj (Integer. amount)) workout-map) current-date])))
+                     [{} nil]
+                     (apply concat (map line-seq readers))))
+      (finally
+        (doseq [rdr (reverse readers)]
+          (. rdr close))))))
 
 (defn query-workout
   "Queries workout map from the function parse-markdown by the start and end date parameters (each of those parameters
@@ -62,25 +66,25 @@
 
 (defn -main
   [& args]
-  (let [[{:keys [help start end]} [path] banner] (tools/cli args (str "This program can be used to summarize amount in workout files written in markdown format\n"
-                                                                      "The information in the workout file must adhere to some simple rules:\n"
-                                                                      "Workout days must be defined by lines with format # dd.MM.yyyy\n"
-                                                                      "Lines where workout amounts is mentioned must start with asterix (*)\n"
-                                                                      "Start date parameter (optional) must have format dd.MM.yyyy\n"
-                                                                      "End date parameter (optional) must have format dd.MM.yyyy")
-                                                            ["-h" "--help" "Show help" :flag true :default false]
-                                                            ["-s" "--start" "Start date (including) of summary in format dd.MM.yyyy"]
-                                                            ["-e" "--end" "End date (including) of summary in format dd.MM.yyyy"])]
+  (let [[{:keys [help start end]} paths banner] (tools/cli args (str "This program can be used to summarize amount in workout files written in markdown format\n"
+                                                                     "The information in the workout file must adhere to some simple rules:\n"
+                                                                     "Workout days must be defined by lines with format # dd.MM.yyyy\n"
+                                                                     "Lines where workout amounts is mentioned must start with asterix (*)\n"
+                                                                     "Start date parameter (optional) must have format dd.MM.yyyy\n"
+                                                                     "End date parameter (optional) must have format dd.MM.yyyy")
+                                                           ["-h" "--help" "Show help" :flag true :default false]
+                                                           ["-s" "--start" "Start date (including) of summary in format dd.MM.yyyy"]
+                                                           ["-e" "--end" "End date (including) of summary in format dd.MM.yyyy"])]
     (when help
       (println banner)
       (System/exit 0))
-    (if path
-      (try (do (let [summary (-> (parse-markdown path)
+    (if (seq paths)
+      (try (do (let [summary (-> (parse-markdown paths)
                                  (query-workout start end)
                                  (sum-workout))]
                  (println (str "Your workout summary is: " summary)))
                (System/exit 0))
         (catch Exception e (do (println (str "Exception encountered - " (.getMessage e)))
                                (System/exit 1))))
-      (do (println "You need to provide path to workout file")
+      (do (println "You need to provide path/s to workout file/s")
           (System/exit 0)))))
