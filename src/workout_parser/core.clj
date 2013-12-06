@@ -26,6 +26,28 @@
     (when throw-on-mismatch?
       (throw (Exception. (str "bad date format encountered, be sure to supply date in format: " (.pattern Pattern)))))))
 
+(defmacro with-file-lines
+  "bindings => [name [file...] ...
+   
+   Evaluates body in try expression with names bound to the concatenated
+   lazy sequences of lines in files specified by those names (they will be
+   read by clojure.java.io/reader, so the names must be something which
+   reader could coerce into files), and finally clause that closes all 
+   filestreams in the right order."
+  [bindings & body]
+  (cond
+   (= (count bindings) 0) `(do ~@body)
+   (symbol? (bindings 0)) (let [readers (gensym "readers")]
+                            `(let [~readers (map clojure.java.io/reader ~(bindings 1))
+                                   ~(bindings 0) (apply concat (map line-seq ~readers))]
+                               (try
+                                 (with-file-lines ~(subvec bindings 2) ~@body)
+                                 (finally
+                                   (doseq [~'rdr ~readers]
+                                     (. ~'rdr close))))))
+   :else (throw (IllegalArgumentException.
+                 "with-file-lines only allows Symbols in bindings"))))
+
 (defn parse-markdown
   "Parses files (specified by paths in argument filenames) in markdown format containing log of workout activities.
    This log must adhere to some rules -> record for each day starts with the line '# dd.MM.yyyy' and each successive
@@ -34,19 +56,15 @@
    start of the next record or by end of file. Output from this function is a map of workout days (vector of three
    integers [year month day]) to sequences of workout amounts (sequence of integers (amount1, amount2 ...))."
   [filenames]
-  (let [readers (map io/reader filenames)]
-    (try
-      (first (reduce (fn [[workout-map current-date] line]
-                       (if-let [new-date (parse-date-string line-date-pattern line false)]
-                         [workout-map new-date]
-                         (if-let [[amount-match amount] (re-find  line-amount-pattern line)]
-                           [(update-in workout-map [current-date] conj (Integer. amount)) current-date]
-                           [workout-map current-date])))
-                     [{} nil]
-                     (apply concat (map line-seq readers))))
-      (finally
-        (doseq [rdr readers]
-          (. rdr close))))))
+  (with-file-lines [lines filenames]
+    (first (reduce (fn [[workout-map current-date] line]
+                     (if-let [new-date (parse-date-string line-date-pattern line false)]
+                       [workout-map new-date]
+                       (if-let [[amount-match amount] (re-find line-amount-pattern line)]
+                         [(update-in workout-map [current-date] conj (Integer. amount)) current-date]
+                         [workout-map current-date])))
+                   [{} nil] 
+                   lines))))
 
 (defn query-workout
   "Queries workout map from the function parse-markdown by the start and end date parameters (each of those parameters
